@@ -1,0 +1,119 @@
+﻿@page "/"
+@using WarehouseApp.Services
+@inject IProductService ProductService
+@inject ISaleService SaleService
+@rendermode InteractiveServer
+
+<style>
+    .hover-card {
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+        .hover-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.12) !important;
+        }
+
+    .stat-box {
+        background: #f8f9fa;
+        border-left: 4px solid #0d6efd;
+    }
+</style>
+
+<div class="container py-4">
+    <div class="p-4 mb-4 bg-primary text-white rounded-3 shadow-sm">
+        <h1 class="display-6 fw-bold">WarehouseApp</h1>
+        <p class="mb-0 fs-5 opacity-75">Добро пожаловать в систему управления складом и продажами</p>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-4">
+            <div class="stat-box p-3 rounded">
+                <h6 class="text-muted mb-1">Товаров на складе</h6>
+                <h3 class="fw-bold mb-0">@totalProductsQuantity</h3>
+                <small class="text-muted">@productsCount наименований</small>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="stat-box p-3 rounded" style="border-left-color: #198754;">
+                <h6 class="text-muted mb-1">Продаж сегодня</h6>
+                <h3 class="fw-bold mb-0">@salesTodayCount</h3>
+                <small class="text-muted">На сумму @salesTodayTotal.ToString("F2") ₽</small>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="stat-box p-3 rounded" style="border-left-color: #0dcaf0;">
+                <h6 class="text-muted mb-1">Всего продаж</h6>
+                <h3 class="fw-bold mb-0">@totalSalesCount</h3>
+                <small class="text-muted">Общая выручка: @totalRevenue.ToString("F2") ₽</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-md-6">
+            <div class="card h-100 border-0 shadow-sm hover-card">
+                <div class="card-body text-center p-4">
+                    <div class="fs-1 mb-3">📦</div>
+                    <h3 class="card-title fw-bold">Товары</h3>
+                    <p class="card-text text-muted mb-3">Управление ассортиментом, остатками и категориями</p>
+                    <a href="products" class="btn btn-primary btn-lg px-4">
+                        Перейти к товарам
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card h-100 border-0 shadow-sm hover-card">
+                <div class="card-body text-center p-4">
+                    <div class="fs-1 mb-3">📊</div>
+                    <h3 class="card-title fw-bold">Продажи</h3>
+                    <p class="card-text text-muted mb-3">История операций, оформление новых продаж и аналитика</p>
+                    <a href="sales" class="btn btn-success btn-lg px-4">
+                        Посмотреть продажи
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private int totalProductsQuantity = 0;
+    private int productsCount = 0;
+    private int salesTodayCount = 0;
+    private decimal salesTodayTotal = 0;
+    private int totalSalesCount = 0;
+    private decimal totalRevenue = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadStatistics();
+    }
+
+    private async Task LoadStatistics()
+    {
+        try
+        {
+            var products = await ProductService.GetAllProductsAsync();
+            productsCount = products.Count;
+            totalProductsQuantity = products.Sum(p => p.Quantity);
+
+            var sales = await SaleService.GetAllSalesAsync();
+            totalSalesCount = sales.Count;
+            totalRevenue = sales.Sum(s => s.TotalPrice);
+
+            var today = DateOnly.FromDateTime(DateTime.Now);
+            var todaySales = sales.Where(s =>
+                DateOnly.FromDateTime(s.SaleDate) == today).ToList();
+
+            salesTodayCount = todaySales.Count;
+            salesTodayTotal = todaySales.Sum(s => s.TotalPrice);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка загрузки статистики: {ex.Message}");
+        }
+    }
+}

@@ -1,0 +1,185 @@
+﻿@page "/products"
+@using WarehouseApp.Models
+@using WarehouseApp.Services
+@inject IProductService ProductService
+@rendermode InteractiveServer
+
+<h3>📦 Управление товарами</h3>
+
+<!-- Кнопка добавления -->
+<button class="btn btn-primary mb-3" @onclick="ShowAddForm">
+    ➕ Добавить товар
+</button>
+
+<!-- Форма добавления/редактирования -->
+@if (showForm)
+{
+    <div class="card mb-3">
+        <div class="card-body">
+            <EditForm Model="@currentProduct" OnValidSubmit="SaveProduct">
+                <DataAnnotationsValidator />
+
+                <div class="mb-2">
+                    <label>Название *</label>
+                    <InputText @bind-Value="currentProduct.Name"
+                               class="form-control"
+                               placeholder="Введите название" />
+                    <ValidationMessage For="@(() => currentProduct.Name)" />
+                </div>
+
+                <div class="mb-2">
+                    <label>Цена *</label>
+                    <InputNumber @bind-Value="currentProduct.Price"
+                                 class="form-control"
+                                 placeholder="0.00" />
+                    <ValidationMessage For="@(() => currentProduct.Price)" />
+                </div>
+
+                <div class="mb-2">
+                    <label>Количество *</label>
+                    <InputNumber @bind-Value="currentProduct.Quantity"
+                                 class="form-control"
+                                 placeholder="0" />
+                </div>
+
+                <div class="mb-2">
+                    <label>Категория</label>
+                    <InputSelect @bind-Value="currentProduct.CategoryId"
+                                 class="form-select">
+                        <option value="0">Выберите категорию</option>
+                        <option value="1">Электроника</option>
+                        <option value="2">Одежда</option>
+                        <option value="3">Продукты</option>
+                        <option value="4">КГТ</option>
+                    </InputSelect>
+                </div>
+
+                <div class="mb-2">
+                    <label>Описание</label>
+                    <InputTextArea @bind-Value="currentProduct.Description"
+                                   class="form-control"
+                                   rows="3" />
+                </div>
+
+                <button type="submit" class="btn btn-success">💾 Сохранить</button>
+                <button type="button" class="btn btn-secondary ms-2"
+                        @onclick="CancelForm">
+                    Отмена
+                </button>
+            </EditForm>
+        </div>
+    </div>
+}
+
+<!-- Таблица товаров -->
+<table class="table table-striped table-hover">
+    <thead class="table-dark">
+        <tr>
+            <th>ID</th>
+            <th>Название</th>
+            <th>Категория</th>
+            <th>Цена</th>
+            <th>Остаток</th>
+            <th>Действия</th>
+        </tr>
+    </thead>
+    <tbody>
+        @if (products?.Any() == true)
+        {
+            @foreach (var product in products)
+            {
+                <tr>
+                    <td>@product.Id</td>
+                    <td>@product.Name</td>
+                    <td>@product.Category?.Name</td>
+                    <td>@product.Price.ToString("F2") ₽</td>
+                    <td>
+                        <span class="badge @(product.Quantity < 10 ? "bg-warning" : "bg-success")">
+                            @product.Quantity шт.
+                        </span>
+                    </td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-primary me-1"
+                                @onclick="() => EditProduct(product)">
+                            ✏️
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger"
+                                @onclick="() => DeleteProduct(product.Id)">
+                            🗑️
+                        </button>
+                    </td>
+                </tr>
+            }
+        }
+        else
+        {
+            <tr>
+                <td colspan="6" class="text-center">Товары не найдены</td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+@code {
+    private List<Product> products = new();
+    private Product currentProduct = new();
+    private bool showForm = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadProducts();
+    }
+
+    private async Task LoadProducts()
+    {
+        products = await ProductService.GetAllProductsAsync();
+        StateHasChanged();
+    }
+
+    private void ShowAddForm()
+    {
+        currentProduct = new Product { CategoryId = 1 };
+        showForm = true;
+    }
+
+    private void EditProduct(Product product)
+    {
+        currentProduct = new Product
+        {
+            Id = product.Id,
+            Name = product.Name,
+            Price = product.Price,
+            Quantity = product.Quantity,
+            Description = product.Description,
+            CategoryId = product.CategoryId
+        };
+        showForm = true;
+    }
+
+    private async Task SaveProduct()
+    {
+        if (currentProduct.Id == 0)
+        {
+            await ProductService.AddProductAsync(currentProduct);
+        }
+        else
+        {
+            await ProductService.UpdateProductAsync(currentProduct);
+        }
+        showForm = false;
+        await LoadProducts();
+    }
+
+    private async Task DeleteProduct(int id)
+    {
+        if (await JS.InvokeAsync<bool>("confirm", "Удалить товар?"))
+        {
+            await ProductService.DeleteProductAsync(id);
+            await LoadProducts();
+        }
+    }
+
+    private void CancelForm() => showForm = false;
+
+    [Inject] private IJSRuntime JS { get; set; } = default!;
+}

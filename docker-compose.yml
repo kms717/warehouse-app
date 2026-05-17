@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  warehouse-app:
+    build:
+      context: .
+      dockerfile: WarehouseApp/Dockerfile
+    container_name: warehouse-app
+    ports:
+      - "8080:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+    volumes:
+      - warehouse-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  warehouse-data:
+    driver: local

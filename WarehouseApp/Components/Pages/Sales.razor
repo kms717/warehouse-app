@@ -1,0 +1,168 @@
+﻿@page "/sales"
+@using WarehouseApp.Models
+@using WarehouseApp.Services
+@inject ISaleService SaleService
+@inject IProductService ProductService
+@rendermode InteractiveServer
+
+<h3>📊 История продаж</h3>
+
+<div class="card mb-4">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">💰 Новая продажа</h5>
+    </div>
+    <div class="card-body">
+        <EditForm Model="@newSale" OnValidSubmit="CreateSale">
+            <DataAnnotationsValidator />
+
+            <div class="row">
+                <div class="col-md-4 mb-2">
+                    <label>Товар *</label>
+                    <InputSelect @bind-Value="newSale.ProductId" class="form-select">
+                        <option value="0">Выберите товар</option>
+                        @foreach (var product in products)
+                        {
+                            <option value="@product.Id">
+                                @product.Name (остаток: @product.Quantity шт., @product.Price.ToString("F2") ₽)
+                            </option>
+                        }
+                    </InputSelect>
+                    <ValidationMessage For="@(() => newSale.ProductId)" />
+                </div>
+
+                <div class="col-md-3 mb-2">
+                    <label>Количество *</label>
+                    <InputNumber @bind-Value="newSale.Quantity" class="form-control" min="1" />
+                    <ValidationMessage For="@(() => newSale.Quantity)" />
+                </div>
+
+                <div class="col-md-3 mb-2">
+                    <label>Покупатель</label>
+                    <InputText @bind-Value="newSale.CustomerName" class="form-control" placeholder="Необязательно" />
+                </div>
+
+                <div class="col-md-2 mb-2 d-flex align-items-end">
+                    <button type="submit" class="btn btn-success w-100">
+                        ✅ Оформить
+                    </button>
+                </div>
+            </div>
+        </EditForm>
+    </div>
+</div>
+
+@if (!string.IsNullOrEmpty(message))
+{
+    <div class="alert @(message.Contains("ошибка") ? "alert-danger" : "alert-success") alert-dismissible fade show" role="alert">
+        @message
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+<div class="card">
+    <div class="card-header bg-info text-white">
+        <h5 class="mb-0">📋 Все продажи</h5>
+    </div>
+    <div class="card-body">
+        @if (sales?.Any() == true)
+        {
+            <table class="table table-striped table-hover">
+                <thead class="table-dark">
+                    <tr>
+                        <th>ID</th>
+                        <th>Дата</th>
+                        <th>Товар</th>
+                        <th>Количество</th>
+                        <th>Сумма</th>
+                        <th>Покупатель</th>
+                        <th>Действия</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var sale in sales)
+                    {
+                        <tr>
+                            <td>@sale.Id</td>
+                            <td>@sale.SaleDate.ToString("dd.MM.yyyy HH:mm")</td>
+                            <td>@sale.Product?.Name</td>
+                            <td>@sale.Quantity шт.</td>
+                            <td><strong>@sale.TotalPrice.ToString("F2") ₽</strong></td>
+                            <td>@(string.IsNullOrEmpty(sale.CustomerName) ? "-" : sale.CustomerName)</td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-danger"
+                                        @onclick="() => DeleteSale(sale.Id)">
+                                    🗑️ Удалить
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                    <tr class="table-primary">
+                        <td colspan="4" class="text-end"><strong>Итого:</strong></td>
+                        <td colspan="2"><strong>@sales.Sum(s => s.TotalPrice).ToString("F2") ₽</strong></td>
+                    </tr>
+                </tbody>
+            </table>
+        }
+        else
+        {
+            <div class="text-center text-muted py-4">
+                <p class="mb-0">Продаж пока нет</p>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Inject] private IJSRuntime JS { get; set; } = default!;
+    private List<Sale> sales = new();
+    private List<Product> products = new();
+    private Sale newSale = new();
+    private string message = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        sales = await SaleService.GetAllSalesAsync();
+        products = await ProductService.GetAllProductsAsync();
+        newSale = new Sale { Quantity = 1 };
+        StateHasChanged();
+    }
+
+    private async Task CreateSale()
+    {
+        if (newSale.ProductId == 0 || newSale.Quantity < 1)
+        {
+            message = "❌ Ошибка: выберите товар и укажите количество";
+            return;
+        }
+
+        var success = await SaleService.ProcessSaleAsync(
+            newSale.ProductId,
+            newSale.Quantity,
+            newSale.CustomerName);
+
+        if (success)
+        {
+            message = $"✅ Продажа оформлена на сумму {(newSale.Quantity * (products.FirstOrDefault(p => p.Id == newSale.ProductId)?.Price ?? 0)):F2} ₽";
+            await LoadData();
+        }
+        else
+        {
+            message = "❌ Ошибка: недостаточно товара на складе";
+        }
+    }
+    private async Task DeleteSale(int id)
+    {
+        var confirmed = await JS.InvokeAsync<bool>("confirm", "Вы уверены, что хотите удалить эту продажу?");
+
+        if (confirmed)
+        {
+            await SaleService.DeleteSaleAsync(id);
+            await LoadData(); 
+        }
+    }
+}
